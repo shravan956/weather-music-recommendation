@@ -241,9 +241,14 @@ def build_search_query(mood, singer, language, generation, variant=0):
 #  ROUTES
 # ─────────────────────────────────────────────
 
+app = Flask(__name__)
 @app.route("/")
 def home():
     return render_template("index.html")
+
+if __name__ == "__main__":
+    app.run()
+
 
 # ── Weather ──────────────────────────────────
 
