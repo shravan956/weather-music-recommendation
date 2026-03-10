@@ -16,7 +16,7 @@ from flask import (
 OPENWEATHER_API_KEY   = "Use  your own  WeatherAPI key"   
 SPOTIFY_CLIENT_ID     = "Use  your own  Spotify API key"       
 SPOTIFY_CLIENT_SECRET = "Use  your own  Spotify API key"
-SPOTIFY_REDIRECT_URI  = "http://127.0.0.1:5000/callback"
+SPOTIFY_REDIRECT_URI  = "Use your own Local URL"
 
 # Flask secret key – change this to a random string in production
 SECRET_KEY = secrets.token_hex(32)
@@ -618,3 +618,4 @@ if __name__ == "__main__":
     print("      http://localhost:5000/callback")
     print("=" * 55 + "\n")
     app.run(debug=True, host="0.0.0.0", port=5000)
+
