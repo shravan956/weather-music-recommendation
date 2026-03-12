@@ -1,4 +1,14 @@
 import os
+import sys
+import io
+
+# Fix Windows Unicode encoding issue (charmap codec error for emoji etc.)
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+os.environ['PYTHONUTF8'] = '1'
+
 import json
 import time
 import base64
@@ -13,10 +23,10 @@ from flask import (
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
 # ─────────────────────────────────────────────
-OPENWEATHER_API_KEY   = "Use  your own  WeatherAPI key"   
-SPOTIFY_CLIENT_ID     = "Use  your own  Spotify API key"       
-SPOTIFY_CLIENT_SECRET = "Use  your own  Spotify API key"
-SPOTIFY_REDIRECT_URI  = "Use your own Local URL"
+OPENWEATHER_API_KEY   = "use your own openweather api key"   
+SPOTIFY_CLIENT_ID     = "use your own spotify client id"         
+SPOTIFY_CLIENT_SECRET = "use your own spotify client secret"
+SPOTIFY_REDIRECT_URI  = "Use your own url"
 
 # Flask secret key – change this to a random string in production
 SECRET_KEY = secrets.token_hex(32)
@@ -600,10 +610,7 @@ def api_player():
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    import sys, io
-    # Force UTF-8 output so emoji in print() work on Windows terminals
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 
     print("\n" + "=" * 55)
     print("  [*] Moodwave Music Player")
@@ -618,4 +625,3 @@ if __name__ == "__main__":
     print("      http://localhost:5000/callback")
     print("=" * 55 + "\n")
     app.run(debug=True, host="0.0.0.0", port=5000)
-
