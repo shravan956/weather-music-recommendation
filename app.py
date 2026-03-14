@@ -25,10 +25,11 @@ from flask import (
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
 # ─────────────────────────────────────────────
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")     
-SPOTIFY_CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID")        
-SPOTIFY_CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET")
-SPOTIFY_REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "").strip()
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "").strip()
+SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI", "").strip()
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "").strip()
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
 
 print("Spotify client loaded:", bool(SPOTIFY_CLIENT_ID))
 print("Spotify secret loaded:", bool(SPOTIFY_CLIENT_SECRET))
@@ -477,7 +478,7 @@ def api_search_single():
 @app.route("/login")
 def login():
     print("SPOTIFY_CLIENT_ID loaded:", bool(SPOTIFY_CLIENT_ID))
-    print("SPOTIFY_REDIRECT_URI:", SPOTIFY_REDIRECT_URI)
+    print("REDIRECT URI repr:", repr(SPOTIFY_REDIRECT_URI))
     auth_url = sp_oauth.get_authorize_url()
     print("AUTH URL:", auth_url)
     return redirect(auth_url)
@@ -625,7 +626,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 55)
     print("  [*] Moodwave Music Player")
     print("=" * 55)
-    print("  >> Open:  https://weather-music-recommendation.onrender.com")
+    print("  >> Open:  https://weather-music-recommendation.onrender.com/callback")
     print()
     print("  [!] Before starting, make sure you have set:")
     print("      OPENWEATHER_API_KEY      (app.py line 16)")
