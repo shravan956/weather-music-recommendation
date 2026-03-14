@@ -23,10 +23,10 @@ from flask import (
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
 # ─────────────────────────────────────────────
-OPENWEATHER_API_KEY   = "use your own weather api key"   
-SPOTIFY_CLIENT_ID     = "use your own spotify client id"         
-SPOTIFY_CLIENT_SECRET = "use your own spotify client secret"
-SPOTIFY_REDIRECT_URI  = "use your own redirect url"
+OPENWEATHER_API_KEY   = os.getenv("weather api key")     
+SPOTIFY_CLIENT_ID     =  os.getenv("SPOTIFY_CLIENT_ID")        
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REDIRECT_URI  = os.getenv("SPOTIFY_REDIRECT_URI")
 
 # Flask secret key – change this to a random string in production
 SECRET_KEY = secrets.token_hex(32)
