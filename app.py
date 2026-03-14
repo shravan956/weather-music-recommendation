@@ -55,7 +55,8 @@ sp_oauth = SpotifyOAuth(
     client_id=SPOTIFY_CLIENT_ID,
     client_secret=SPOTIFY_CLIENT_SECRET,
     redirect_uri=SPOTIFY_REDIRECT_URI,
-    scope=scope
+    scope="streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state user-read-currently-playing",
+    cache_path=None
 )
 
 # ─────────────────────────────────────────────
@@ -475,8 +476,8 @@ def api_search_single():
 
 @app.route("/login")
 def login():
-    print("CLIENT ID:", SPOTIFY_CLIENT_ID)
-    print("REDIRECT URI:", SPOTIFY_REDIRECT_URI)
+    print("SPOTIFY_CLIENT_ID loaded:", bool(SPOTIFY_CLIENT_ID))
+    print("SPOTIFY_REDIRECT_URI:", SPOTIFY_REDIRECT_URI)
     auth_url = sp_oauth.get_authorize_url()
     print("AUTH URL:", auth_url)
     return redirect(auth_url)
