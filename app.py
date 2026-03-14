@@ -17,10 +17,7 @@ import requests
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from datetime import datetime
-from flask import (
-    Flask, render_template, request, jsonify,
-    session, redirect, url_for
-)
+from flask import Flask, request, redirect, session, render_template, jsonify, url_for
 
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
@@ -62,7 +59,7 @@ sp_oauth = SpotifyOAuth(
 
 # ─────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "").strip()
+app.secret_key = os.getenv("SECRET_KEY", "dev_secret").strip()
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
@@ -484,13 +481,25 @@ def login():
 
 @app.route("/callback")
 def callback():
-    code = request.args.get("code")
-    if not code:
-        return "No code received from Spotify"
+    try:
+        error = request.args.get("error")
+        code = request.args.get("code")
 
-    token_info = sp_oauth.get_access_token(code)
-    session["token_info"] = token_info
-    return "Spotify login successful"
+        print("Callback args:", dict(request.args))
+
+        if error:
+            return f"Spotify login failed: {error}"
+
+        if not code:
+            return "No code received from Spotify"
+
+        token_info = sp_oauth.get_access_token(code)
+        session["token_info"] = token_info
+        return "Spotify login successful"
+
+    except Exception as e:
+        print("Callback exception:", repr(e))
+        return f"Callback error: {repr(e)}", 500
 
 # ── Token Endpoint (for Spotify SDK) ────────
 
