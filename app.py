@@ -62,7 +62,9 @@ sp_oauth = SpotifyOAuth(
 
 # ─────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = SECRET_KEY
+app.secret_key = os.getenv("SECRET_KEY", "").strip()
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # ─────────────────────────────────────────────
 #  HELPER – WEATHER LOGIC
@@ -477,66 +479,18 @@ def api_search_single():
 
 @app.route("/login")
 def login():
-    print("SPOTIFY_CLIENT_ID loaded:", bool(SPOTIFY_CLIENT_ID))
-    print("REDIRECT URI repr:", repr(SPOTIFY_REDIRECT_URI))
     auth_url = sp_oauth.get_authorize_url()
-    print("AUTH URL:", auth_url)
     return redirect(auth_url)
 
 @app.route("/callback")
 def callback():
-    error = request.args.get("error")
-    if error:
-        return redirect(f"/?auth=error&msg={error}")
+    code = request.args.get("code")
+    if not code:
+        return "No code received from Spotify"
 
-    code  = request.args.get("code", "")
-    state = request.args.get("state", "")
-
-    if state != session.get("oauth_state"):
-        return redirect("/?auth=error&msg=state_mismatch")
-
-    creds = base64.b64encode(
-        f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
-    ).decode()
-
-    try:
-        resp = requests.post(
-            "https://accounts.spotify.com/api/token",
-            headers={"Authorization": f"Basic {creds}",
-                     "Content-Type": "application/x-www-form-urlencoded"},
-            data={
-                "grant_type"  : "authorization_code",
-                "code"        : code,
-                "redirect_uri": SPOTIFY_REDIRECT_URI,
-            },
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            return redirect(f"/?auth=error&msg=token_exchange_failed")
-
-        token_data = resp.json()
-        session["access_token"]     = token_data["access_token"]
-        session["refresh_token"]    = token_data.get("refresh_token", "")
-        session["token_expires_at"] = time.time() + token_data.get("expires_in", 3600) - 60
-
-        # Fetch user profile
-        profile_resp = requests.get(
-            "https://api.spotify.com/v1/me",
-            headers={"Authorization": f"Bearer {token_data['access_token']}"},
-            timeout=10,
-        )
-        if profile_resp.status_code != 200:
-            return redirect(f"/?auth=error&msg=Profile fetch failed: {profile_resp.text}")
-            
-        profile = profile_resp.json()
-        session["user_name"]   = profile.get("display_name", "Listener")
-        session["user_image"]  = (profile.get("images") or [{}])[0].get("url", "")
-        session["user_product"]= profile.get("product", "free")  # "premium" or "free"
-
-        return redirect("/?auth=success")
-
-    except Exception as e:
-        return redirect(f"/?auth=error&msg={str(e)}")
+    token_info = sp_oauth.get_access_token(code)
+    session["token_info"] = token_info
+    return "Spotify login successful"
 
 # ── Token Endpoint (for Spotify SDK) ────────
 
