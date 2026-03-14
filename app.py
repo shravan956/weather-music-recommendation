@@ -30,6 +30,13 @@ SPOTIFY_CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI")
 
+print("Spotify client loaded:", bool(SPOTIFY_CLIENT_ID))
+print("Spotify secret loaded:", bool(SPOTIFY_CLIENT_SECRET))
+print("Spotify redirect uri:", SPOTIFY_REDIRECT_URI)
+print("Weather key loaded:", bool(OPENWEATHER_API_KEY))
+print("Weather key first 5 chars:", OPENWEATHER_API_KEY[:5] if OPENWEATHER_API_KEY else None)
+
+
 # Flask secret key – change this to a random string in production
 SECRET_KEY = secrets.token_hex(32)
 
@@ -278,6 +285,10 @@ def api_weather():
             return jsonify({"error": "Provide 'city' or 'lat' and 'lon' query parameters."}), 400
 
         resp = requests.get(url, params=params, timeout=10)
+        print("Weather key loaded:", bool(OPENWEATHER_API_KEY))
+        print("Weather API URL:", url)
+        print("Weather API status:", resp.status_code)
+        print("Weather API response:", resp.text)
 
         if resp.status_code == 404:
             return jsonify({"error": f"City '{city}' not found. Please check the spelling."}), 404
@@ -464,23 +475,10 @@ def api_search_single():
 
 @app.route("/login")
 def login():
-    if SPOTIFY_CLIENT_ID == "YOUR_SPOTIFY_CLIENT_ID":
-        return jsonify({"error": "Spotify credentials not configured."}), 503
-
-    state = secrets.token_hex(16)
-    session["oauth_state"] = state
-
-    params = {
-        "response_type": "code",
-        "client_id"    : SPOTIFY_CLIENT_ID,
-        "scope"        : SPOTIFY_SCOPES,
-        "redirect_uri" : SPOTIFY_REDIRECT_URI,
-        "state"        : state,
-        "show_dialog"  : "false",
-    }
-    auth_url = "https://accounts.spotify.com/authorize?" + "&".join(
-        f"{k}={requests.utils.quote(str(v))}" for k, v in params.items()
-    )
+    print("CLIENT ID:", SPOTIFY_CLIENT_ID)
+    print("REDIRECT URI:", SPOTIFY_REDIRECT_URI)
+    auth_url = sp_oauth.get_authorize_url()
+    print("AUTH URL:", auth_url)
     return redirect(auth_url)
 
 @app.route("/callback")
