@@ -14,6 +14,8 @@ import time
 import base64
 import secrets
 import requests
+import spotipy
+from spotipy.oauth2 import SpotifyOAuth
 from datetime import datetime
 from flask import (
     Flask, render_template, request, jsonify,
@@ -23,7 +25,7 @@ from flask import (
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
 # ─────────────────────────────────────────────
-OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")    
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")     
 SPOTIFY_CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID")        
 SPOTIFY_CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI")
@@ -39,6 +41,14 @@ SPOTIFY_SCOPES = (
     "user-read-playback-state "
     "user-modify-playback-state "
     "user-read-currently-playing"
+)
+
+scope = SPOTIFY_SCOPES
+sp_oauth = SpotifyOAuth(
+    client_id=SPOTIFY_CLIENT_ID,
+    client_secret=SPOTIFY_CLIENT_SECRET,
+    redirect_uri=SPOTIFY_REDIRECT_URI,
+    scope=scope
 )
 
 # ─────────────────────────────────────────────
@@ -616,7 +626,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 55)
     print("  [*] Moodwave Music Player")
     print("=" * 55)
-    print("  >> Open:  https://weather-music-recommendation.onrender.com/callback")
+    print("  >> Open:  https://weather-music-recommendation.onrender.com")
     print()
     print("  [!] Before starting, make sure you have set:")
     print("      OPENWEATHER_API_KEY      (app.py line 16)")
@@ -626,4 +636,3 @@ if __name__ == "__main__":
     print("      https://weather-music-recommendation.onrender.com/callback")
     print("=" * 55 + "\n")
     app.run(debug=True, host="0.0.0.0", port=5000)
-
