@@ -485,8 +485,6 @@ def callback():
         error = request.args.get("error")
         code = request.args.get("code")
 
-        print("Callback args:", dict(request.args))
-
         if error:
             return f"Spotify login failed: {error}"
 
@@ -495,10 +493,10 @@ def callback():
 
         token_info = sp_oauth.get_access_token(code)
         session["token_info"] = token_info
-        return "Spotify login successful"
+
+        return redirect("/")
 
     except Exception as e:
-        print("Callback exception:", repr(e))
         return f"Callback error: {repr(e)}", 500
 
 # ── Token Endpoint (for Spotify SDK) ────────
