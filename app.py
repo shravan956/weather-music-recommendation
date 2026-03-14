@@ -23,7 +23,7 @@ from flask import (
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
 # ─────────────────────────────────────────────
-OPENWEATHER_API_KEY=os.getenv("weather api key")     
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")    
 SPOTIFY_CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID")        
 SPOTIFY_CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI")
