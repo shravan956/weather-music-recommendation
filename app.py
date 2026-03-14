@@ -3,9 +3,9 @@ import sys
 import io
 
 # Fix Windows Unicode encoding issue (charmap codec error for emoji etc.)
-if sys.stdout.encoding != 'utf-8':
+if sys.stdout and hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-if sys.stderr.encoding != 'utf-8':
+if sys.stderr and hasattr(sys.stderr, 'encoding') and sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 os.environ['PYTHONUTF8'] = '1'
 
@@ -23,10 +23,10 @@ from flask import (
 # ─────────────────────────────────────────────
 #  ██████  CONFIG – PASTE YOUR API KEYS HERE
 # ─────────────────────────────────────────────
-OPENWEATHER_API_KEY   = "use your own openweather api key"   
+OPENWEATHER_API_KEY   = "use your own weather api key"   
 SPOTIFY_CLIENT_ID     = "use your own spotify client id"         
 SPOTIFY_CLIENT_SECRET = "use your own spotify client secret"
-SPOTIFY_REDIRECT_URI  = "Use your own url"
+SPOTIFY_REDIRECT_URI  = "use your own spotify redirect uri"
 
 # Flask secret key – change this to a random string in production
 SECRET_KEY = secrets.token_hex(32)
@@ -42,7 +42,7 @@ SPOTIFY_SCOPES = (
 )
 
 # ─────────────────────────────────────────────
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = SECRET_KEY
 
 # ─────────────────────────────────────────────
@@ -242,7 +242,7 @@ def build_search_query(mood, singer, language, generation, variant=0):
 # ─────────────────────────────────────────────
 
 @app.route("/")
-def index():
+def home():
     return render_template("index.html")
 
 # ── Weather ──────────────────────────────────
