@@ -26,7 +26,7 @@ from flask import (
 OPENWEATHER_API_KEY   = "use your own weather api key"   
 SPOTIFY_CLIENT_ID     = "use your own spotify client id"         
 SPOTIFY_CLIENT_SECRET = "use your own spotify client secret"
-SPOTIFY_REDIRECT_URI  = "use your own redirecr url"
+SPOTIFY_REDIRECT_URI  = "use your own redirect url"
 
 # Flask secret key – change this to a random string in production
 SECRET_KEY = secrets.token_hex(32)
@@ -42,7 +42,7 @@ SPOTIFY_SCOPES = (
 )
 
 # ─────────────────────────────────────────────
-app = Flask(__name__, template_folder="templates", static_folder="static")
+app = Flask(__name__)
 app.secret_key = SECRET_KEY
 
 # ─────────────────────────────────────────────
