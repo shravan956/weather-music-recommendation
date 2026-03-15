@@ -56,13 +56,17 @@ SPOTIFY_SCOPES = (
 )
 
 scope = SPOTIFY_SCOPES
-sp_oauth = SpotifyOAuth(
-    client_id=SPOTIFY_CLIENT_ID,
-    client_secret=SPOTIFY_CLIENT_SECRET,
-    redirect_uri=SPOTIFY_REDIRECT_URI,
-    scope="streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state user-read-currently-playing",
-    cache_path=None
-)
+try:
+    sp_oauth = SpotifyOAuth(
+        client_id=SPOTIFY_CLIENT_ID,
+        client_secret=SPOTIFY_CLIENT_SECRET,
+        redirect_uri=SPOTIFY_REDIRECT_URI,
+        scope="streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state user-read-currently-playing",
+        cache_path=None
+    )
+except Exception as e:
+    print(f"[WARNING] SpotifyOAuth init failed: {e}")
+    sp_oauth = None
 
 # ─────────────────────────────────────────────
 app = Flask(__name__)
@@ -489,6 +493,8 @@ def api_search_single():
 
 @app.route("/login")
 def login():
+    if not sp_oauth:
+        return redirect("/?auth=error&msg=Spotify+credentials+not+configured")
     auth_url = sp_oauth.get_authorize_url()
     return redirect(auth_url)
 
@@ -503,6 +509,9 @@ def callback():
 
         if not code:
             return redirect("/?auth=error&msg=No+code+received")
+
+        if not sp_oauth:
+            return redirect("/?auth=error&msg=Spotify+credentials+not+configured")
 
         token_info = sp_oauth.get_access_token(code)
 
