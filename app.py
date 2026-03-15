@@ -2,6 +2,13 @@ import os
 import sys
 import io
 
+# Load .env file if present (for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Fix Windows Unicode encoding issue (charmap codec error for emoji etc.)
 if sys.stdout and hasattr(sys.stdout, 'encoding') and sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -60,7 +67,9 @@ sp_oauth = SpotifyOAuth(
 # ─────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret").strip()
-app.config["SESSION_COOKIE_SECURE"] = True
+# Only enforce HTTPS cookies in true production (not on localhost)
+_is_local = "localhost" in SPOTIFY_REDIRECT_URI or "127.0.0.1" in SPOTIFY_REDIRECT_URI
+app.config["SESSION_COOKIE_SECURE"] = not _is_local
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 # ─────────────────────────────────────────────
@@ -486,15 +495,36 @@ def callback():
         code = request.args.get("code")
 
         if error:
-            return f"Spotify login failed: {error}"
+            return redirect("/?auth=error&msg=" + error)
 
         if not code:
-            return "No code received from Spotify"
+            return redirect("/?auth=error&msg=No+code+received")
 
         token_info = sp_oauth.get_access_token(code)
-        session["token_info"] = token_info
 
-        return redirect("/")
+        # Save tokens using the keys that get_user_token() expects
+        session["token_info"]       = token_info
+        session["access_token"]     = token_info["access_token"]
+        session["refresh_token"]    = token_info.get("refresh_token", "")
+        session["token_expires_at"] = time.time() + token_info.get("expires_in", 3600) - 60
+
+        # Fetch user profile so we can display name/avatar in the header
+        try:
+            me_resp = requests.get(
+                "https://api.spotify.com/v1/me",
+                headers={"Authorization": f"Bearer {token_info['access_token']}"},
+                timeout=10,
+            )
+            if me_resp.status_code == 200:
+                me = me_resp.json()
+                session["user_name"]    = me.get("display_name") or me.get("id", "Listener")
+                session["user_product"] = me.get("product", "free")
+                images = me.get("images", [])
+                session["user_image"]   = images[0]["url"] if images else ""
+        except Exception:
+            pass  # Non-critical – profile display is optional
+
+        return redirect("/?auth=success")
 
     except Exception as e:
         return f"Callback error: {repr(e)}", 500
