@@ -35,7 +35,7 @@ SINGERS = [
     "Armaan Malik", "Neha Kakkar", "Jubin Nautiyal", "Badshah", "Kishore Kumar"
 ]
 
-LANGUAGES = ["Hindi", "English", "Tamil", "Telugu"]
+LANGUAGES = ["Hindi", "English", "Tamil", "Telugu", "Marathi", "Punjabi", "Bengali", "Bhojpuri", "Odia"]
 
 CATEGORIES = {
     "All": "song",
@@ -201,6 +201,7 @@ def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation
         "key": YOUTUBE_API_KEY,
         "maxResults": 8,
         "type": "video",
+        "videoEmbeddable": "true",
         "safeSearch": "moderate",
         "regionCode": "IN",
         "order": "viewCount" if generation == "Trendy" else "relevance"
@@ -490,6 +491,7 @@ def api_search_yt():
         "key": YOUTUBE_API_KEY,
         "maxResults": 5,
         "type": "video",
+        "videoEmbeddable": "true",
         "safeSearch": "moderate",
         "regionCode": "IN",
         "videoDuration": "medium",
