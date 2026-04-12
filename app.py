@@ -235,10 +235,15 @@ MOOD_GENRE_MAP = {
 }
 
 LANGUAGE_MAP = {
-    "Hindi"   : "hindi",
-    "English" : "english",
-    "Tamil"   : "tamil",
-    "Telugu"  : "telugu",
+    "Hindi"    : "hindi",
+    "English"  : "english",
+    "Tamil"    : "tamil",
+    "Telugu"   : "telugu",
+    "Marathi"  : "marathi",
+    "Punjabi"  : "punjabi",
+    "Bengali"  : "bengali",
+    "Bhojpuri" : "bhojpuri",
+    "Odia"     : "odia",
 }
 
 GENERATION_MAP = {
