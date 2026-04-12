@@ -1492,31 +1492,21 @@
       <div class="glass" id="fcard">
         <h3>🎛️ Filters</h3>
         <div class="fg"><label class="fl">Singer / Artist</label>
-          <select class="fs" id="fsnger">
+          <select class="fs" id="fsnger" onchange="">
             <option value="">Any Artist</option>
-            <option>Arijit Singh</option>
-            <option>Shreya Ghoshal</option>
-            <option>Jubin Nautiyal</option>
-            <option>Neha Kakkar</option>
-            <option>Atif Aslam</option>
-            <option>Kishore Kumar</option>
-            <option>Lata Mangeshkar</option>
-            <option>A.R. Rahman</option>
-            <option>Taylor Swift</option>
-            <option>Ed Sheeran</option>
-            <option>The Weeknd</option>
-            <option>Coldplay</option>
-            <option>Dua Lipa</option>
-            <option>SPB</option>
-            <option>Sid Sriram</option>
           </select>
         </div>
         <div class="fg"><label class="fl">Language</label>
-          <select class="fs" id="flang">
+          <select class="fs" id="flang" onchange="updateSingers()">
             <option value="Hindi">Hindi</option>
             <option value="English">English</option>
             <option value="Tamil">Tamil</option>
             <option value="Telugu">Telugu</option>
+            <option value="Marathi">Marathi</option>
+            <option value="Punjabi">Punjabi</option>
+            <option value="Bengali">Bengali</option>
+            <option value="Bhojpuri">Bhojpuri</option>
+            <option value="Odia">Odia</option>
           </select>
         </div>
         <div class="fg"><label class="fl">Mood</label>
@@ -2108,6 +2098,31 @@
       }
     }
 
+    // ── SINGERS BY LANGUAGE ──
+    const SINGERS_BY_LANG = {
+      'Hindi': ['Arijit Singh', 'Shreya Ghoshal', 'Jubin Nautiyal', 'Neha Kakkar', 'Atif Aslam', 'Kishore Kumar', 'Lata Mangeshkar', 'A.R. Rahman', 'Kumar Sanu', 'Udit Narayan'],
+      'English': ['Taylor Swift', 'Ed Sheeran', 'The Weeknd', 'Coldplay', 'Dua Lipa', 'Bruno Mars', 'Billie Eilish', 'Justin Bieber', 'Ariana Grande', 'Adele'],
+      'Tamil': ['SPB', 'Sid Sriram', 'Yuvan Shankar Raja', 'Anirudh Ravichander', 'Ilaiyaraaja', 'Hariharan', 'Chinmayi', 'Shreya Ghoshal'],
+      'Telugu': ['SP Balasubrahmanyam', 'Sid Sriram', 'Armaan Malik', 'Chinmayi', 'Karthik', 'Anurag Kulkarni', 'Sunitha Upadrashta'],
+      'Marathi': ['Ajay-Atul', 'Vaibhav Joshi', 'Bela Shende', 'Anand Shinde', 'Swaroop Khan', 'Shreya Ghoshal', 'Adarsh Shinde', 'Swapnil Bandodkar'],
+      'Punjabi': ['Diljit Dosanjh', 'AP Dhillon', 'Sidhu Moosewala', 'B Praak', 'Guru Randhawa', 'Harrdy Sandhu', 'Shubh', 'Ammy Virk', 'Karan Aujla'],
+      'Bengali': ['Arijit Singh', 'Nachiketa Chakraborty', 'Anupam Roy', 'Usha Uthup', 'Rupankar Bagchi', 'Shreya Ghoshal', 'Kumar Sanu'],
+      'Bhojpuri': ['Pawan Singh', 'Khesari Lal Yadav', 'Ritesh Pandey', 'Neelkamal Singh', 'Pramod Premi', 'Dinesh Lal Yadav'],
+      'Odia': ['Humane Sagar', 'Ira Mohanty', 'Sourin Bhatt', 'Tapu Mishra', 'Ashok Pati', 'Nibedita'],
+    };
+    function updateSingers() {
+      const lang = document.getElementById('flang').value;
+      const sel = document.getElementById('fsnger');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Any Artist</option>';
+      (SINGERS_BY_LANG[lang] || SINGERS_BY_LANG['Hindi']).forEach(s => {
+        const o = document.createElement('option');
+        o.value = s; o.textContent = s;
+        if (s === prev) o.selected = true;
+        sel.appendChild(o);
+      });
+    }
+
     // ── AUTH CHECK ──
     function checkAuth() {
       const p = new URLSearchParams(location.search);
@@ -2124,7 +2139,7 @@
         }
       }).catch(() => { });
     }
-    document.addEventListener('DOMContentLoaded', checkAuth);
+    document.addEventListener('DOMContentLoaded', () => { checkAuth(); updateSingers(); });
   </script>
   {% endraw %}
 </body>
