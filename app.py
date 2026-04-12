@@ -71,6 +71,7 @@ except Exception as e:
 # ─────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev_secret").strip()
+app.config["TEMPLATES_AUTO_RELOAD"] = True   # always serve fresh templates
 # Only enforce HTTPS cookies in true production (not on localhost)
 _is_local = "localhost" in SPOTIFY_REDIRECT_URI or "127.0.0.1" in SPOTIFY_REDIRECT_URI
 app.config["SESSION_COOKIE_SECURE"] = not _is_local
@@ -415,6 +416,48 @@ def api_recommend():
 
     except requests.exceptions.Timeout:
         return jsonify({"error": "Spotify request timed out."}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ── YouTube Search ─────────────────────────────
+
+@app.route("/api/youtube_search")
+def api_youtube_search():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"error": "Query parameter 'q' is required."}), 400
+
+    if not YOUTUBE_API_KEY:
+        return jsonify({"error": "YouTube API key not configured."}), 503
+
+    try:
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "part": "id,snippet",
+                "q": q,
+                "type": "video",
+                "videoEmbeddable": "true",
+                "maxResults": 5,
+                "key": YOUTUBE_API_KEY,
+            },
+            timeout=10,
+        )
+        if resp.status_code == 403:
+            return jsonify({"error": "YouTube API quota exceeded or key invalid."}), 403
+        if resp.status_code != 200:
+            return jsonify({"error": f"YouTube API error: {resp.status_code}"}), 502
+
+        items = resp.json().get("items", [])
+        for item in items:
+            vid = item.get("id", {}).get("videoId")
+            if vid:
+                return jsonify({"video_id": vid})
+
+        return jsonify({"error": "No embeddable video found."}), 404
+
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "YouTube request timed out."}), 504
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
