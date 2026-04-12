@@ -57,18 +57,41 @@ GENERATIONS = {
     "Trendy": "trending viral song india"
 }
 
-WEATHER_TO_CATEGORY = {
-    "Clear": "Party",
-    "Rain": "Romantic",
-    "Clouds": "Chill",
-    "Snow": "Classic",
-    "Thunderstorm": "Workout",
-    "Haze": "Chill",
-    "Mist": "Chill",
-    "Smoke": "Classic",
-    "Drizzle": "Romantic",
-    "Fog": "Chill",
-}
+def weather_to_category(weather_data: dict) -> str:
+    """
+    Same mood logic as the Spotify/Moodwave music project.
+    Uses weather condition, time of day (day/night via icon), and temperature.
+    """
+    try:
+        weather_main = weather_data["weather"][0]["main"]
+        icon_code    = weather_data["weather"][0]["icon"]
+        temp_c       = weather_data["main"]["temp"]   # already in Celsius (units=metric)
+    except (KeyError, IndexError):
+        return "Chill"
+
+    is_day = 'd' in icon_code
+
+    if weather_main == "Clear":
+        if is_day:
+            return "Chill" if temp_c > 35 else "Party"
+        else:
+            return "Romantic"
+    elif weather_main == "Clouds":
+        return "Chill" if is_day else "Sad"
+    elif weather_main in ("Rain", "Drizzle"):
+        return "Romantic"
+    elif weather_main == "Thunderstorm":
+        return "Workout"
+    elif weather_main == "Snow":
+        return "Classic"
+    elif weather_main in ("Mist", "Fog", "Haze"):
+        return "Chill" if is_day else "Sad"
+    elif weather_main in ("Smoke", "Dust", "Sand", "Ash"):
+        return "Sad"
+    elif weather_main in ("Squall", "Tornado"):
+        return "Workout"
+    return "Chill"
+
 
 
 # ================= WEATHER HELPERS =================
@@ -165,13 +188,18 @@ def parse_duration_seconds(iso: str) -> int:
 
 # ================= UPDATED fetch_songs WITH GENERATION =================
 
+# Sentinel to signal a hard YouTube API error (quota/key)
+class _YTError(Exception):
+    pass
+
+
 def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation):
     search_url = "https://www.googleapis.com/youtube/v3/search"
     search_params = {
         "part": "snippet",
         "q": q,
         "key": YOUTUBE_API_KEY,
-        "maxResults": 20,
+        "maxResults": 8,
         "type": "video",
         "safeSearch": "moderate",
         "regionCode": "IN",
@@ -180,8 +208,12 @@ def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation
 
     sdata = yt_get(search_url, search_params)
     if "error" in sdata:
-        print(f"[YT ERROR] {sdata['error']}")
-        return []
+        err = sdata["error"]
+        code = err.get("code", "?")
+        msg  = err.get("message", str(err))
+        print(f"[YT ERROR] {code}: {msg}")
+        # Raise so the caller knows it's a hard error, not just empty results
+        raise _YTError(f"YouTube API error {code}: {msg}")
     items = sdata.get("items", [])
 
     results = []
@@ -214,6 +246,7 @@ def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation
     return results
 
 def fetch_songs(singer: str, language: str, category: str, generation: str = "All", target: int = 40, exclude_ids: list = None):
+    """Returns (list_of_songs, error_string_or_None)."""
     query_tag = CATEGORIES.get(category, "song")
     gen_tag = GENERATIONS.get(generation, "")
 
@@ -236,8 +269,9 @@ def fetch_songs(singer: str, language: str, category: str, generation: str = "Al
 
     songs = []
     seen = set(exclude_ids or [])
+    yt_error = None  # capture first YouTube API hard error
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         future_to_query = {executor.submit(_fetch_single_query, q, target, YOUTUBE_API_KEY, singer, category, generation): q for q in queries}
         for future in concurrent.futures.as_completed(future_to_query):
             try:
@@ -248,11 +282,18 @@ def fetch_songs(singer: str, language: str, category: str, generation: str = "Al
                         seen.add(vid)
                         songs.append(song)
                         if len(songs) >= target:
-                            return songs
+                            return songs, None
+            except _YTError as e:
+                yt_error = str(e)
+                print(f"[ERROR] YouTube API hard error: {e}")
             except Exception as e:
                 print(f"[ERROR] Thread execution failed: {e}")
 
-    return songs
+    # If we got a YouTube error and no songs, surface the real error
+    if not songs and yt_error:
+        return [], yt_error
+
+    return songs, None
 
 
 # ================= ROUTES =================
@@ -300,7 +341,7 @@ def home():
                 "city": w.get("name", city) or "Your Location",
                 "weather": weather_main,
                 "temp": w["main"]["temp"],
-                "suggested": WEATHER_TO_CATEGORY.get(weather_main, "Chill"),
+                "suggested": weather_to_category(w),
                 "season": season,
                 "month": month,
             }
@@ -309,7 +350,7 @@ def home():
             if selected_category == "All" and weather_info.get("suggested"):
                 effective_category = weather_info["suggested"]
 
-            playlist = fetch_songs(
+            playlist, yt_err = fetch_songs(
                 selected_singer,
                 selected_language,
                 effective_category,
@@ -318,7 +359,16 @@ def home():
             )
 
             if not playlist:
-                error = "No songs found. (Check YouTube quota / key restrictions)."
+                if yt_err:
+                    # Surface the real YouTube error (quota exceeded, invalid key, etc.)
+                    if "quota" in yt_err.lower() or "403" in yt_err:
+                        error = "YouTube API quota exceeded. Please try again after midnight (IST) or use a different API key."
+                    elif "400" in yt_err or "API key" in yt_err.lower() or "keyInvalid" in yt_err.lower():
+                        error = "Invalid YouTube API key. Please check your API key in the .env file."
+                    else:
+                        error = f"YouTube API error: {yt_err}"
+                else:
+                    error = "No songs found. Try different filters."
         else:
             error = "City not found / Weather API error."
 
@@ -362,7 +412,7 @@ def api_refresh():
                 "city": w.get("name", city),
                 "weather": weather_main,
                 "temp": w["main"]["temp"],
-                "suggested": WEATHER_TO_CATEGORY.get(weather_main, "Chill"),
+                "suggested": weather_to_category(w),
                 "season": season,
                 "month": month,
             }
@@ -371,9 +421,12 @@ def api_refresh():
     if category == "All" and weather_info and weather_info.get("suggested"):
         effective_category = weather_info["suggested"]
 
-    songs = fetch_songs(singer, language, effective_category, generation, target=target, exclude_ids=exclude_ids)
+    songs, yt_err = fetch_songs(singer, language, effective_category, generation, target=target, exclude_ids=exclude_ids)
 
-    return jsonify({"songs": songs, "weather_info": weather_info, "used_category": effective_category})
+    result = {"songs": songs, "weather_info": weather_info, "used_category": effective_category}
+    if yt_err:
+        result["error"] = yt_err
+    return jsonify(result)
 
 
 @app.route("/api/refresh_coords", methods=["POST"])
@@ -406,7 +459,7 @@ def api_refresh_coords():
             "location": exact_loc if exact_loc else w.get("name", "Your Location"),
             "weather": weather_main,
             "temp": w["main"]["temp"],
-            "suggested": WEATHER_TO_CATEGORY.get(weather_main, "Chill"),
+            "suggested": weather_to_category(w),
             "season": season,
             "month": month,
             "lat": lat,
@@ -417,9 +470,12 @@ def api_refresh_coords():
     if category == "All" and weather_info and weather_info.get("suggested"):
         effective_category = weather_info["suggested"]
 
-    songs = fetch_songs(singer, language, effective_category, generation, target=target, exclude_ids=exclude_ids)
+    songs, yt_err = fetch_songs(singer, language, effective_category, generation, target=target, exclude_ids=exclude_ids)
 
-    return jsonify({"songs": songs, "weather_info": weather_info, "used_category": effective_category})
+    result = {"songs": songs, "weather_info": weather_info, "used_category": effective_category}
+    if yt_err:
+        result["error"] = yt_err
+    return jsonify(result)
 
 
 @app.route("/api/search_yt")
@@ -449,6 +505,35 @@ def api_search_yt():
         return jsonify({"error": "No video found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/ip_location")
+def api_ip_location():
+    """Get approximate location from IP address — no browser permission needed."""
+    try:
+        # Get the real client IP (works behind proxies too)
+        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+
+        # 127.0.0.1 / localhost — use ipapi.co without specifying IP (auto-detects)
+        if not client_ip or client_ip in ("127.0.0.1", "localhost", "::1"):
+            r = requests.get("https://ipapi.co/json/", timeout=8,
+                             headers={"User-Agent": "moodwave-app/1.0"})
+        else:
+            r = requests.get(f"https://ipapi.co/{client_ip}/json/", timeout=8,
+                             headers={"User-Agent": "moodwave-app/1.0"})
+
+        data = r.json()
+        lat = data.get("latitude")
+        lon = data.get("longitude")
+        city = data.get("city", "")
+
+        if lat and lon:
+            return jsonify({"lat": lat, "lon": lon, "city": city, "ok": True})
+        return jsonify({"ok": False, "error": "Could not determine location"}), 404
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 if __name__ == "__main__":
