@@ -15,6 +15,9 @@ import time
 SPOTIFY_DIR = os.path.dirname(os.path.abspath(__file__))
 YOUTUBE_DIR = os.path.join(os.path.dirname(SPOTIFY_DIR), "rm project")
 
+# The rm project uses 'rm app.py' as its script name
+YOUTUBE_SCRIPT = "rm app.py"
+
 
 def stream(proc, label):
     for line in iter(proc.stdout.readline, b""):
@@ -25,8 +28,12 @@ def stream(proc, label):
 
 
 def launch(script_dir, script_name, label):
+    script_path = os.path.join(script_dir, script_name)
+    if not os.path.isfile(script_path):
+        print(f"[ERROR] Script not found: {script_path}")
+        return None
     proc = subprocess.Popen(
-        [sys.executable, os.path.join(script_dir, script_name)],
+        [sys.executable, script_path],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         cwd=script_dir,
@@ -53,13 +60,19 @@ if __name__ == "__main__":
     procs = []
 
     sp = launch(SPOTIFY_DIR, "app.py", "Spotify:5000")
-    procs.append(sp)
-    time.sleep(1.2)
+    if sp:
+        procs.append(sp)
+    time.sleep(1.5)
 
-    yt = launch(YOUTUBE_DIR, "app.py", "YouTube:5001")
-    procs.append(yt)
+    yt = launch(YOUTUBE_DIR, YOUTUBE_SCRIPT, "YouTube:5001")
+    if yt:
+        procs.append(yt)
 
-    print("[MoodWave] Both servers running. Press Ctrl+C to stop.\n")
+    if not procs:
+        print("[ERROR] No servers started. Check the script paths above.")
+        sys.exit(1)
+
+    print("[MoodWave] Servers running. Press Ctrl+C to stop.\n")
 
     try:
         for p in procs:
