@@ -715,8 +715,8 @@ def api_emotion_songs():
 try:
     from yt_app import yt_bp
     app.register_blueprint(yt_bp, url_prefix="/yt")
-except ImportError:
-    pass
+except Exception as e:
+    print(f"[ERROR] Failed to register yt_bp from yt_app.py: {e}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
