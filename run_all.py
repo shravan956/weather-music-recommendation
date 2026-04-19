@@ -1,6 +1,7 @@
 """
-MoodWave - Run All Servers
-Starts both Spotify (port 5000) and YouTube (port 5001) together.
+MoodWave - Run Server
+Both Spotify and YouTube pages run from ONE server (port 5000).
+Anyone on the same Wi-Fi can open using this laptop's IP.
 
 Run:
     python run_all.py
@@ -9,14 +10,22 @@ Run:
 import subprocess
 import sys
 import os
+import socket
 import threading
-import time
 
 SPOTIFY_DIR = os.path.dirname(os.path.abspath(__file__))
-YOUTUBE_DIR = os.path.join(os.path.dirname(SPOTIFY_DIR), "rm project")
 
-# The rm project uses 'rm app.py' as its script name
-YOUTUBE_SCRIPT = "rm app.py"
+
+def get_local_ip():
+    """Get this laptop's Wi-Fi / LAN IP address automatically."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 def stream(proc, label):
@@ -44,41 +53,36 @@ def launch(script_dir, script_name, label):
 
 
 if __name__ == "__main__":
-    print("=" * 52)
-    print("  MoodWave - Starting Both Servers")
-    print("=" * 52)
-    print("  Spotify  ->  http://localhost:5000")
-    print("  YouTube  ->  http://localhost:5001")
-    print("=" * 52)
+    local_ip = get_local_ip()
+
+    print("=" * 62)
+    print("  MoodWave — Music Player")
+    print("=" * 62)
+    print()
+    print("  ── Access URLs ────────────────────────────────────────")
+    print(f"  🖥️   Is laptop par    ->  http://localhost:5000")
+    print(f"  📱   Same Wi-Fi par   ->  http://{local_ip}:5000")
+    print()
+    print("  🎵   Spotify page     ->  http://localhost:5000/")
+    print("  🎬   YouTube page     ->  http://localhost:5000/yt")
+    print()
+    print("  💡  Kisi bhi doosre laptop/phone par yeh URL kholo:")
+    print(f"      http://{local_ip}:5000")
+    print("  ⚠️   Zaruri: Dono devices ek hi Wi-Fi se connected hon!")
+    print()
+    print("=" * 62)
     print()
 
-    if not os.path.isdir(YOUTUBE_DIR):
-        print(f"[ERROR] YouTube project not found at: {YOUTUBE_DIR}")
-        print("        Make sure 'rm project' folder exists next to 'music project'.")
+    sp = launch(SPOTIFY_DIR, "app.py", "MoodWave:5000")
+    if not sp:
+        print("[ERROR] app.py not found! Check the music project folder.")
         sys.exit(1)
 
-    procs = []
-
-    sp = launch(SPOTIFY_DIR, "app.py", "Spotify:5000")
-    if sp:
-        procs.append(sp)
-    time.sleep(1.5)
-
-    yt = launch(YOUTUBE_DIR, YOUTUBE_SCRIPT, "YouTube:5001")
-    if yt:
-        procs.append(yt)
-
-    if not procs:
-        print("[ERROR] No servers started. Check the script paths above.")
-        sys.exit(1)
-
-    print("[MoodWave] Servers running. Press Ctrl+C to stop.\n")
+    print("[MoodWave] Server chal raha hai. Ctrl+C dabaao band karne ke liye.\n")
 
     try:
-        for p in procs:
-            p.wait()
+        sp.wait()
     except KeyboardInterrupt:
-        print("\n[MoodWave] Stopping all servers...")
-        for p in procs:
-            p.terminate()
-        print("[MoodWave] Stopped. Bye!")
+        print("\n[MoodWave] Server band ho raha hai...")
+        sp.terminate()
+        print("[MoodWave] Band ho gaya. Bye! 👋")
