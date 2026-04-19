@@ -23,7 +23,8 @@ import calendar
 import re
 import concurrent.futures
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+from flask import Blueprint
+yt_bp = Blueprint("yt_bp", __name__)
 
 # ===== API KEYS (set these in Render dashboard / .env file) =====
 WEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "use your own weather api key").strip()
@@ -39,13 +40,20 @@ LANGUAGES = ["Hindi", "English", "Tamil", "Telugu", "Marathi", "Punjabi", "Benga
 
 CATEGORIES = {
     "All": "song",
-    "Romantic": "romantic song",
-    "Sad": "sad song",
-    "Chill": "lofi chill song",
-    "Party": "party song",
-    "Workout": "workout song",
+    "Romantic": "romantic love song",
+    "Sad": "sad emotional song",
+    "Chill": "lofi chill relax song",
+    "Party": "party dance song",
+    "Workout": "workout gym motivation song",
     "Classic": "old classic song",
     "Mix": "songs",
+    "Happy": "happy upbeat feel good song",
+    "Angry": "intense powerful aggressive song",
+    "Calm": "calm peaceful meditation song",
+    "Devotional": "devotional bhajan spiritual song",
+    "Energetic": "energetic upbeat high energy song",
+    "Nostalgic": "nostalgic retro throwback song",
+    "Motivational": "motivational inspiring pump up song",
 }
 
 GENERATIONS = {
@@ -164,15 +172,20 @@ def get_weather_by_coords(lat: float, lon: float):
 
 
 def yt_get(url, params):
-    r = requests.get(url, params=params, timeout=25)
-    print(f"[YT] HTTP {r.status_code} => {url.split('/')[-1]}")
-    data = r.json()
-    if "error" in data:
-        err = data["error"]
-        code = err.get("code", "?")
-        msg  = err.get("message", str(err))
-        print(f"[ERROR] YouTube API {code}: {msg}")
-    return data
+    try:
+        r = requests.get(url, params=params, timeout=12)
+        print(f"[YT] HTTP {r.status_code} => {url.split('/')[-1]}")
+        data = r.json()
+        if "error" in data:
+            err = data["error"]
+            code = err.get("code", "?")
+            msg  = err.get("message", str(err))
+            print(f"[ERROR] YouTube API {code}: {msg}")
+        return data
+    except Exception as e:
+        # SSL / network error → treat as quota exceeded so fallback triggers
+        print(f"[YT] Network/SSL error: {e} → triggering fallback")
+        return {"error": {"code": 403, "message": "quotaExceeded (network error fallback)", "errors": [{"reason": "quotaExceeded"}]}}
 
 
 def parse_duration_seconds(iso: str) -> int:
@@ -192,6 +205,107 @@ def parse_duration_seconds(iso: str) -> int:
 class _YTError(Exception):
     pass
 
+# ── YouTube InnerTube API (primary fallback — no key, no quota, very reliable) ──
+_INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
+_INNERTUBE_URL = "https://www.youtube.com/youtubei/v1/search"
+_INNERTUBE_HDR = {
+    "Content-Type": "application/json",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "X-YouTube-Client-Name": "1",
+    "X-YouTube-Client-Version": "2.20240101.00.00",
+}
+
+# ── Invidious instances (last resort backup) ──
+INVIDIOUS_INSTANCES = [
+    "https://invidious.privacyredirect.com",
+    "https://inv.nadeko.net",
+    "https://yt.artemislena.eu",
+]
+
+def _no_api_search(q, target=8):
+    """
+    Primary fallback: YouTube InnerTube API (no API key, no quota).
+    Used internally by YouTube itself — extremely reliable.
+    """
+    skip_kw = ["interview", "news", "episode", "podcast", "reaction",
+               "review", "tutorial", "cricket", "match", "trailer"]
+
+    # ── 1. InnerTube API ──
+    try:
+        payload = {
+            "context": {
+                "client": {
+                    "clientName": "WEB",
+                    "clientVersion": "2.20240101.00.00",
+                    "hl": "en",
+                    "gl": "IN",
+                }
+            },
+            "query": q,
+            "params": "EgIQAQ==",  # filter: videos only
+        }
+        resp = requests.post(
+            _INNERTUBE_URL,
+            params={"key": _INNERTUBE_KEY, "prettyPrint": "false"},
+            headers=_INNERTUBE_HDR,
+            json=payload,
+            timeout=12,
+        )
+        data = resp.json()
+        sections = (data.get("contents", {})
+                        .get("twoColumnSearchResultsRenderer", {})
+                        .get("primaryContents", {})
+                        .get("sectionListRenderer", {})
+                        .get("contents", []))
+        results = []
+        for section in sections:
+            items = section.get("itemSectionRenderer", {}).get("contents", [])
+            for item in items:
+                vr = item.get("videoRenderer")
+                if not vr:
+                    continue
+                vid     = vr.get("videoId", "")
+                title   = "".join(r.get("text", "") for r in vr.get("title", {}).get("runs", []))
+                channel = "".join(r.get("text", "") for r in vr.get("ownerText", {}).get("runs", []))
+                if not vid or not title:
+                    continue
+                if any(kw in title.lower() for kw in skip_kw):
+                    continue
+                results.append({"video_id": vid, "title": title,
+                                "channel": channel, "embeddable": True})
+                if len(results) >= target:
+                    break
+            if len(results) >= target:
+                break
+        if results:
+            print(f"[InnerTube] Found {len(results)} results for: {q}")
+            return results
+    except Exception as e:
+        print(f"[InnerTube] Failed: {e}")
+
+    # ── 2. Invidious (last resort) ──
+    for base in INVIDIOUS_INSTANCES:
+        try:
+            r = requests.get(f"{base}/api/v1/search",
+                             params={"q": q, "type": "video", "page": 1},
+                             timeout=7)
+            if r.status_code == 200:
+                results = []
+                for it in r.json()[:target]:
+                    vid   = it.get("videoId")
+                    title = it.get("title", "")
+                    if not vid: continue
+                    if any(kw in title.lower() for kw in skip_kw): continue
+                    results.append({"video_id": vid, "title": title,
+                                    "channel": it.get("author", ""), "embeddable": True})
+                if results:
+                    print(f"[Invidious] Got {len(results)} from {base}")
+                    return results
+        except Exception as e:
+            print(f"[Invidious] {base} failed: {e}")
+    return []
+
+
 
 def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation):
     search_url = "https://www.googleapis.com/youtube/v3/search"
@@ -202,6 +316,7 @@ def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation
         "maxResults": 8,
         "type": "video",
         "videoEmbeddable": "true",
+        "videoSyndicated": "true",
         "safeSearch": "moderate",
         "regionCode": "IN",
         "order": "viewCount" if generation == "Trendy" else "relevance"
@@ -209,12 +324,24 @@ def _fetch_single_query(q, target, YOUTUBE_API_KEY, singer, category, generation
 
     sdata = yt_get(search_url, search_params)
     if "error" in sdata:
-        err = sdata["error"]
+        err  = sdata["error"]
         code = err.get("code", "?")
         msg  = err.get("message", str(err))
         print(f"[YT ERROR] {code}: {msg}")
-        # Raise so the caller knows it's a hard error, not just empty results
+
+        # ── Quota exceeded → fallback to no-API search ──
+        if code in (403, 429) or "quota" in msg.lower() or "quotaExceeded" in str(err):
+            print(f"[Fallback] YouTube quota exceeded — using no-API search for: {q}")
+            fallback = _no_api_search(q, target)
+            # Attach singer/category/generation metadata
+            for s in fallback:
+                s["singer"] = singer
+                s["category"] = category
+                s["generation"] = generation
+            return fallback
+
         raise _YTError(f"YouTube API error {code}: {msg}")
+
     items = sdata.get("items", [])
 
     results = []
@@ -253,27 +380,49 @@ def fetch_songs(singer: str, language: str, category: str, generation: str = "Al
 
     import random
 
-    # Official Indian music labels — their videos are ALWAYS embeddable
-    music_labels = ["T-Series", "Sony Music India", "Zee Music Company", "Tips Official", "Saregama Music", "YRF Music"]
-    random.shuffle(music_labels)
+    # Clean inputs
+    singer = (singer or "").strip()
+    language = (language or "Hindi").strip()
 
-    suffixes = ["audio", "lyrical video", "full song", "official video", "audio jukebox"]
+    # Build parts - filter empty tokens to avoid junk queries
+    def q(*parts):
+        return " ".join(p for p in parts if p and p.strip())
+
+    # Extra suffixes that help get embeddable videos
+    suffixes = ["audio", "lyrical video", "full song", "jukebox", "song lyrics", "slowed reverb"]
     random.shuffle(suffixes)
 
-    queries = [
-        f"{singer} {language} {query_tag} {gen_tag} {music_labels[0]} {suffixes[0]}",
-        f"{singer} {query_tag} {gen_tag} {music_labels[1]} {suffixes[1]}",
-        f"{singer} {language} {query_tag} {gen_tag} official {suffixes[2]}",
-        f"{singer} {gen_tag} {music_labels[2]} {suffixes[3]}",
-        f"{query_tag} {language} {gen_tag} {music_labels[3]} {suffixes[4]}",
-    ]
+    if singer:
+        # Singer-specific queries first, then general
+        queries = [
+            q(singer, language, query_tag, gen_tag, suffixes[0]),
+            q(singer, language, query_tag, gen_tag, "audio"),
+            q(singer, query_tag, language, gen_tag, "lyrical video"),
+            q(singer, query_tag, gen_tag, suffixes[1]),
+            q(query_tag, language, gen_tag, suffixes[2]),
+        ]
+    else:
+        # No singer — use genre/mood + language queries
+        queries = [
+            q(language, query_tag, gen_tag, suffixes[0]),
+            q(query_tag, language, gen_tag, "audio"),
+            q(language, query_tag, gen_tag, "lyrical video"),
+            q(query_tag, language, gen_tag, suffixes[1]),
+            q(language, query_tag, gen_tag, suffixes[2]),
+        ]
+
+    # Remove duplicate or empty queries
+    queries = list(dict.fromkeys(q for q in queries if len(q) > 5))
+
+    print(f"[fetch_songs] category={category}, language={language}, singer={singer!r}, generation={generation}")
+    print(f"[fetch_songs] queries={queries}")
 
     songs = []
     seen = set(exclude_ids or [])
     yt_error = None  # capture first YouTube API hard error
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        future_to_query = {executor.submit(_fetch_single_query, q, target, YOUTUBE_API_KEY, singer, category, generation): q for q in queries}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_query = {executor.submit(_fetch_single_query, qr, target, YOUTUBE_API_KEY, singer, category, generation): qr for qr in queries}
         for future in concurrent.futures.as_completed(future_to_query):
             try:
                 results = future.result()
@@ -299,7 +448,7 @@ def fetch_songs(singer: str, language: str, category: str, generation: str = "Al
 
 # ================= ROUTES =================
 
-@app.route("/", methods=["GET", "POST"])
+@yt_bp.route("/", methods=["GET", "POST"])
 def home():
     error = None
     playlist = []
@@ -374,7 +523,7 @@ def home():
             error = "City not found / Weather API error."
 
     return render_template(
-        "index.html",
+        "yt_index.html",
         singers=SINGERS,
         languages=LANGUAGES,
         categories=list(CATEGORIES.keys()),
@@ -390,7 +539,7 @@ def home():
     )
 
 
-@app.route("/api/refresh", methods=["POST"])
+@yt_bp.route("/api/refresh", methods=["POST"])
 def api_refresh():
     data = request.get_json(force=True)
 
@@ -430,7 +579,7 @@ def api_refresh():
     return jsonify(result)
 
 
-@app.route("/api/refresh_coords", methods=["POST"])
+@yt_bp.route("/api/refresh_coords", methods=["POST"])
 def api_refresh_coords():
     data = request.get_json(force=True)
 
@@ -479,7 +628,7 @@ def api_refresh_coords():
     return jsonify(result)
 
 
-@app.route("/api/search_yt")
+@yt_bp.route("/api/search_yt")
 def api_search_yt():
     q = request.args.get("q", "").strip()
     if not q:
@@ -492,6 +641,7 @@ def api_search_yt():
         "maxResults": 5,
         "type": "video",
         "videoEmbeddable": "true",
+        "videoSyndicated": "true",
         "safeSearch": "moderate",
         "regionCode": "IN",
         "videoDuration": "medium",
@@ -509,7 +659,7 @@ def api_search_yt():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/ip_location")
+@yt_bp.route("/api/ip_location")
 def api_ip_location():
     """Get approximate location from IP address — no browser permission needed."""
     try:
@@ -538,5 +688,132 @@ def api_ip_location():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5001)
+# ─────────────────────────────────────────────
+#  EMOTION → SONGS  (browser face-api.js sends detected emotion)
+# ─────────────────────────────────────────────
+
+EMOTION_TO_MOOD_YT = {
+    # face-api.js standard emotions
+    "happy"     : "Happy",
+    "sad"       : "Sad",
+    "angry"     : "Angry",
+    "fearful"   : "Calm",
+    "fear"      : "Calm",
+    "disgusted" : "Sad",
+    "surprised" : "Energetic",
+    "surprise"  : "Energetic",
+    "neutral"   : "Chill",
+    # extended moods (manual/extra)
+    "excited"   : "Party",
+    "calm"      : "Calm",
+    "romantic"  : "Romantic",
+    "energetic" : "Energetic",
+    "tired"     : "Chill",
+    "bored"     : "Nostalgic",
+    "lonely"    : "Sad",
+    "stressed"  : "Calm",
+    "motivated" : "Motivational",
+    "nostalgic" : "Nostalgic",
+    "devotional": "Devotional",
+}
+
+EMOTION_EMOJI_YT = {
+    "happy"     : "😄",
+    "sad"       : "😢",
+    "angry"     : "😠",
+    "fearful"   : "😨",
+    "fear"      : "😨",
+    "disgusted" : "🤢",
+    "surprised" : "😲",
+    "surprise"  : "😲",
+    "neutral"   : "😐",
+    "excited"   : "🤩",
+    "calm"      : "😌",
+    "romantic"  : "🥰",
+    "energetic" : "⚡",
+    "tired"     : "😴",
+    "bored"     : "😑",
+    "lonely"    : "🥺",
+    "stressed"  : "😰",
+    "motivated" : "💪",
+    "nostalgic" : "🌅",
+    "devotional": "🙏",
+}
+
+EMOTION_VIBE_YT = {
+    "happy"     : "Feeling great! Time to party 🎉",
+    "sad"       : "Let the music heal your soul 💙",
+    "angry"     : "Channel that energy into the beat! 🔥",
+    "fearful"   : "Find your calm with soothing tunes 🌊",
+    "fear"      : "Find your calm with soothing tunes 🌊",
+    "disgusted" : "Music to lift your spirits 🌈",
+    "surprised" : "Full of energy — let's go! ⚡",
+    "surprise"  : "Full of energy — let's go! ⚡",
+    "neutral"   : "Chill vibes, perfect lo-fi moment 🎵",
+    "excited"   : "The crowd is vibing! 🎊",
+    "calm"      : "Peace and tranquility for your mind 🧘",
+    "romantic"  : "Love is in the air 🌹",
+    "energetic" : "Maximum energy mode activated! 💥",
+    "tired"     : "Relax and let the music take over 😌",
+    "bored"     : "Take a trip down memory lane 🌅",
+    "lonely"    : "You're not alone, music is here 💙",
+    "stressed"  : "Breathe in, breathe out, let the music flow 🌿",
+    "motivated" : "Nothing can stop you now! 🚀",
+    "nostalgic" : "Golden memories coming right up 🏆",
+    "devotional": "Divine music for the soul 🙏",
+}
+
+@yt_bp.route("/api/emotion_songs", methods=["POST"])
+def api_emotion_songs():
+    data    = request.get_json(force=True)
+    emotion = (data.get("emotion") or "neutral").lower()
+    mood    = EMOTION_TO_MOOD_YT.get(emotion, "Chill")
+    emoji   = EMOTION_EMOJI_YT.get(emotion, "😐")
+    vibe    = EMOTION_VIBE_YT.get(emotion, "Music for every mood 🎵")
+    return jsonify({"mood": mood, "emoji": emoji, "emotion": emotion, "vibe": vibe})
+
+
+@yt_bp.route("/api/emotion_playlist", methods=["POST"])
+def api_emotion_playlist():
+    """
+    Dedicated emotion-based playlist endpoint — works WITHOUT city/weather.
+    Frontend sends emotion + language + generation => returns songs directly.
+    """
+    data       = request.get_json(force=True)
+    emotion    = (data.get("emotion") or "neutral").lower()
+    language   = data.get("language", "Hindi")
+    singer     = data.get("singer", "").strip()
+    generation = data.get("generation", "All")
+    target     = int(data.get("target", 20))
+    exclude_ids = data.get("exclude_ids", [])
+
+    mood  = EMOTION_TO_MOOD_YT.get(emotion, "Chill")
+    emoji = EMOTION_EMOJI_YT.get(emotion, "😐")
+    vibe  = EMOTION_VIBE_YT.get(emotion, "Music for every mood 🎵")
+
+    # If singer is a placeholder, ignore it
+    if singer.lower() in ("", "any", "all", "any artist"):
+        singer = ""
+
+    songs, yt_err = fetch_songs(
+        singer=singer,
+        language=language,
+        category=mood,
+        generation=generation,
+        target=target,
+        exclude_ids=exclude_ids
+    )
+
+    result = {
+        "mood"    : mood,
+        "emoji"   : emoji,
+        "emotion" : emotion,
+        "vibe"    : vibe,
+        "songs"   : songs,
+    }
+    if yt_err:
+        result["error"] = yt_err
+    return jsonify(result)
+
+
+
