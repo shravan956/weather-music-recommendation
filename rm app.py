@@ -448,6 +448,7 @@ def fetch_songs(singer: str, language: str, category: str, generation: str = "Al
 
 # ================= ROUTES =================
 
+@yt_bp.route("", methods=["GET", "POST"])
 @yt_bp.route("/", methods=["GET", "POST"])
 def home():
     error = None
