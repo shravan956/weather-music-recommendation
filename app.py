@@ -168,19 +168,24 @@ def get_client_credentials_token():
     creds = base64.b64encode(
         f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
     ).decode()
-    resp = requests.post(
-        "https://accounts.spotify.com/api/token",
-        headers={"Authorization": f"Basic {creds}",
-                 "Content-Type": "application/x-www-form-urlencoded"},
-        data={"grant_type": "client_credentials"},
-        timeout=10,
-    )
-    if resp.status_code != 200:
+    
+    try:
+        resp = requests.post(
+            "https://accounts.spotify.com/api/token",
+            headers={"Authorization": f"Basic {creds}",
+                     "Content-Type": "application/x-www-form-urlencoded"},
+            data={"grant_type": "client_credentials"},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return None
+        token_data = resp.json()
+        session["cc_token"]     = token_data["access_token"]
+        session["cc_token_exp"] = time.time() + token_data.get("expires_in", 3600) - 60
+        return token_data["access_token"]
+    except Exception as e:
+        print(f"[Spotify] Client token fetch error: {e}")
         return None
-    token_data = resp.json()
-    session["cc_token"]     = token_data["access_token"]
-    session["cc_token_exp"] = time.time() + token_data.get("expires_in", 3600) - 60
-    return token_data["access_token"]
 
 def get_user_token():
     """Return user OAuth access token, refreshing if expired."""
@@ -198,23 +203,29 @@ def get_user_token():
     creds = base64.b64encode(
         f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
     ).decode()
-    resp = requests.post(
-        "https://accounts.spotify.com/api/token",
-        headers={"Authorization": f"Basic {creds}",
-                 "Content-Type": "application/x-www-form-urlencoded"},
-        data={"grant_type": "refresh_token", "refresh_token": refresh_token},
-        timeout=10,
-    )
-    if resp.status_code != 200:
+    
+    try:
+        resp = requests.post(
+            "https://accounts.spotify.com/api/token",
+            headers={"Authorization": f"Basic {creds}",
+                     "Content-Type": "application/x-www-form-urlencoded"},
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            session.pop("access_token", None)
+            return None
+
+        token_data = resp.json()
+        session["access_token"]     = token_data["access_token"]
+        session["token_expires_at"] = time.time() + token_data.get("expires_in", 3600) - 60
+        if "refresh_token" in token_data:
+            session["refresh_token"] = token_data["refresh_token"]
+        return token_data["access_token"]
+    except Exception as e:
+        print(f"[Spotify] User token refresh error: {e}")
         session.pop("access_token", None)
         return None
-
-    token_data = resp.json()
-    session["access_token"]     = token_data["access_token"]
-    session["token_expires_at"] = time.time() + token_data.get("expires_in", 3600) - 60
-    if "refresh_token" in token_data:
-        session["refresh_token"] = token_data["refresh_token"]
-    return token_data["access_token"]
 
 def best_token():
     """Return user token if available, fall back to client credentials."""
@@ -414,7 +425,7 @@ def api_recommend():
                 "external_url": item.get("external_urls", {}).get("spotify", ""),
             })
 
-            if len(tracks) == 10:
+            if len(tracks) >= 10:
                 break
 
         return jsonify({"tracks": tracks, "query": query})
@@ -432,39 +443,15 @@ def api_youtube_search():
     if not q:
         return jsonify({"error": "Query parameter 'q' is required."}), 400
 
-    if not YOUTUBE_API_KEY:
-        return jsonify({"error": "YouTube API key not configured."}), 503
-
     try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/search",
-            params={
-                "part": "id,snippet",
-                "q": q,
-                "type": "video",
-                "videoEmbeddable": "true",
-                "maxResults": 5,
-                "key": YOUTUBE_API_KEY,
-            },
-            timeout=10,
-        )
-        if resp.status_code == 403:
-            return jsonify({"error": "YouTube API quota exceeded or key invalid."}), 403
-        if resp.status_code != 200:
-            return jsonify({"error": f"YouTube API error: {resp.status_code}"}), 502
-
-        items = resp.json().get("items", [])
-        for item in items:
-            vid = item.get("id", {}).get("videoId")
-            if vid:
-                return jsonify({"video_id": vid})
-
-        return jsonify({"error": "No embeddable video found."}), 404
-
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "YouTube request timed out."}), 504
+        from yt_app import _fetch_single_query, YOUTUBE_API_KEY
+        results = _fetch_single_query(q, 1, YOUTUBE_API_KEY, "", "All", "All")
+        if results and isinstance(results, list) and len(results) > 0:
+            return jsonify({"video_id": results[0].get("video_id")})
+        return jsonify({"error": "No video found."}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # ── Single Song Search ────────────────────────
 
@@ -478,25 +465,23 @@ def api_search_single():
     if not token:
         return jsonify({"error": "Could not obtain Spotify token."}), 503
 
-    try:
-        resp = requests.get(
+    def do_search(tok, query, limit=10):
+        return requests.get(
             "https://api.spotify.com/v1/search",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"q": q, "type": "track", "limit": 1, "market": "IN"},
+            headers={"Authorization": f"Bearer {tok}"},
+            params={"q": query, "type": "track", "limit": limit, "market": "IN"},
             timeout=10,
         )
+
+    try:
+        resp = do_search(token, q)
 
         if resp.status_code == 401:
             session.pop("access_token", None)
             session.pop("cc_token", None)
             token = best_token()
             if token:
-                resp = requests.get(
-                    "https://api.spotify.com/v1/search",
-                    headers={"Authorization": f"Bearer {token}"},
-                    params={"q": q, "type": "track", "limit": 1, "market": "IN"},
-                    timeout=10,
-                )
+                resp = do_search(token, q)
             else:
                 return jsonify({"error": "Spotify authentication failed."}), 401
 
@@ -510,7 +495,25 @@ def api_search_single():
         if not items:
             return jsonify({"error": f"No track found for '{q}'"}), 404
 
-        item = items[0]
+        # ── Smart matching: exact → starts-with → partial → fallback ──
+        q_lower = q.lower().strip()
+
+        # Priority 1: Exact title match
+        best = next((i for i in items if i["name"].lower().strip() == q_lower), None)
+        # Priority 2: Title starts with query
+        if not best:
+            best = next((i for i in items if i["name"].lower().strip().startswith(q_lower)), None)
+        # Priority 3: Query starts with title (e.g. "khat" matches "Khat (feat. ...)")
+        if not best:
+            best = next((i for i in items if q_lower.startswith(i["name"].lower().strip())), None)
+        # Priority 4: Title contains the query word
+        if not best:
+            best = next((i for i in items if q_lower in i["name"].lower()), None)
+        # Priority 5: Fall back to first Spotify result
+        if not best:
+            best = items[0]
+
+        item = best
         album_images = item.get("album", {}).get("images", [])
         album_art    = album_images[0]["url"] if album_images else ""
         artists      = ", ".join(a["name"] for a in item.get("artists", []))
@@ -668,9 +671,52 @@ def api_player():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+# ─────────────────────────────────────────────
+#  EMOTION → SONGS  (browser sends detected emotion)
+# ─────────────────────────────────────────────
+
+EMOTION_TO_MOOD = {
+    "happy"  : "Party",
+    "sad"    : "Sad",
+    "angry"  : "Workout",
+    "fearful": "Chill",
+    "fear"   : "Chill",
+    "disgusted": "Sad",
+    "surprised": "Party",
+    "surprise" : "Party",
+    "neutral"  : "Chill",
+}
+
+EMOTION_EMOJI = {
+    "happy": "😄", "sad": "😢", "angry": "😠",
+    "fearful": "😨", "fear": "😨", "disgusted": "🤢",
+    "surprised": "😲", "surprise": "😲", "neutral": "😐",
+}
+
+@app.route("/api/emotion_songs", methods=["POST"])
+def api_emotion_songs():
+    data     = request.get_json(force=True)
+    emotion  = (data.get("emotion") or "neutral").lower()
+    language = data.get("language", "Hindi")
+    singer   = data.get("singer", "")
+    generation = data.get("generation", "All")
+    mood     = EMOTION_TO_MOOD.get(emotion, "Chill")
+    emoji    = EMOTION_EMOJI.get(emotion, "😐")
+    return jsonify({"mood": mood, "emoji": emoji, "emotion": emotion,
+                    "language": language, "singer": singer, "generation": generation})
+
+
 # ─────────────────────────────────────────────
 #  ENTRY POINT
 # ─────────────────────────────────────────────
+
+# Register yt app blueprint
+try:
+    from yt_app import yt_bp
+    app.register_blueprint(yt_bp, url_prefix="/yt")
+except ImportError:
+    pass
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
