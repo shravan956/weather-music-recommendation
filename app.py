@@ -716,7 +716,14 @@ try:
     from yt_app import yt_bp
     app.register_blueprint(yt_bp, url_prefix="/yt")
 except Exception as e:
-    print(f"[ERROR] Failed to register yt_bp from yt_app.py: {e}")
+    import traceback
+    err_trace = traceback.format_exc()
+    print(f"[ERROR] Failed to register yt_bp from yt_app.py:\n{err_trace}")
+    
+    @app.route("/yt")
+    @app.route("/yt/")
+    def yt_error():
+        return f"<h2>Failed to load YouTube App</h2><p>Please share this error with your developer:</p><pre>{err_trace}</pre>", 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
