@@ -725,5 +725,13 @@ except Exception as e:
     def yt_error():
         return f"<h2>Failed to load YouTube App</h2><p>Please share this error with your developer:</p><pre>{err_trace}</pre>", 500
 
+try:
+    from offline_app import offline_bp
+    app.register_blueprint(offline_bp)
+except Exception as e:
+    import traceback
+    err_trace = traceback.format_exc()
+    print(f"[ERROR] Failed to register offline_bp from offline_app.py:\n{err_trace}")
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

@@ -1688,8 +1688,12 @@
     </div>
 
     <div id="ua">
+      <button id="offline-goto-btn" onclick="location.href='/offline'" title="Open Offline Mode" style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 9px 16px; border-radius: 50px; color: white; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; font-family: 'Inter', sans-serif;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+        Offline Mode
+      </button>
 
-      <button id="yt-goto-btn" onclick="window.open('/yt/', '_blank')" title="Open YouTube App">
+      <button id="yt-goto-btn" onclick="location.href='/yt/'" title="Open YouTube App">
         <svg width="17" height="13" viewBox="0 0 24 17" fill="currentColor">
           <path
             d="M23.5 2.7s-.3-2-1.2-2.9C21.2-.4 19.9-.4 19.3-.5 16.1-.7 12-.7 12-.7s-4.1 0-7.3.2C4.1-.4 2.8-.4 1.7.7.8 1.6.5 3.7.5 3.7S.2 6 .2 8.3v2.1c0 2.3.3 4.6.3 4.6s.3 2 1.2 2.9c1.1 1.2 2.6 1.1 3.3 1.2C7.2 19.2 12 19.2 12 19.2s4.6 0 7.3-.4c.6-.1 1.9-.1 3-1.3.9-.9 1.2-2.9 1.2-2.9s.3-2.3.3-4.6V7c0-2.3-.3-4.3-.3-4.3zm-14 9.1V4.7l8.3 3.6-8.3 3.5z" />
@@ -2489,6 +2493,7 @@
     }
     
     async function startEmotionCam() {
+      if (emoStream) stopEmotionCam();
       if (!modelsLoaded) {
         const p = document.getElementById("emo-placeholder");
         p.innerHTML = "Downloading AI models (~3MB)...<br>Please wait wait.";
@@ -2553,8 +2558,9 @@
       
       emoDetectInterval = setInterval(async () => {
         // ── detectAllFaces: scan EVERY face in the frame ──
+        // Increased inputSize and scoreThreshold for better accuracy
         const allDetections = await faceapi
-          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.22 }))
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.4 }))
           .withFaceExpressions();
 
         const ctx = canvas.getContext('2d');
@@ -2594,18 +2600,29 @@
             aggr[emo] = (aggr[emo] || 0) + val;
           });
         });
-        const topEmotion = Object.keys(aggr).reduce((a,b) => aggr[a] > aggr[b] ? a : b);
         
-        emoHistory.push(topEmotion);
+        const sortedEmos = Object.keys(aggr).sort((a,b) => aggr[b] - aggr[a]);
+        const topEmotion = sortedEmos[0];
+        const secEmotion = sortedEmos[1];
+        const topConf = Math.round((aggr[topEmotion] / allDetections.length) * 100);
+        const secConf = Math.round((aggr[secEmotion] / allDetections.length) * 100);
+        
+        // Multiple mood string if secondary is significant (>25%)
+        let currentDetected = topEmotion;
+        if (secConf >= 25) {
+           currentDetected = topEmotion + "," + secEmotion;
+        }
+        
+        emoHistory.push(currentDetected);
         if (emoHistory.length > HISTORY_LEN) emoHistory.shift();
 
-        // Find the most frequent emotion in recent history
+        // Find the most frequent combined emotion in recent history
         const counts = {};
         for (let e of emoHistory) { 
            if(e) counts[e] = (counts[e] || 0) + 1; 
         }
         
-        let maxEmo = topEmotion;
+        let maxEmo = currentDetected;
         let maxCount = 0;
         for (let e in counts) {
            if (counts[e] > maxCount) { 
@@ -2615,16 +2632,21 @@
         }
 
         const emojiMap = { happy:"😄", sad:"😢", angry:"😠", fearful:"😨", disgusted:"🤢", surprised:"😲", neutral:"😐" };
-        document.getElementById("emo-display-emoji").innerText = emojiMap[maxEmo] || "😐";
-        document.getElementById("emo-display-text").innerText = maxEmo.toUpperCase() + " (Focusing...)";
+        const primaryEmo = maxEmo.split(",")[0];
+        const hasMultiple = maxEmo.includes(",");
+        const displayLabel = hasMultiple ? maxEmo.split(",").join(" & ").toUpperCase() : maxEmo.toUpperCase();
+
+        document.getElementById("emo-display-emoji").innerText = emojiMap[primaryEmo] || "😐";
+        document.getElementById("emo-display-text").innerText = displayLabel + " (Focusing...)";
         document.getElementById("emo-display-desc").innerText = `Confirming mood... [${maxCount}/${HISTORY_LEN}]`;
 
         if (maxCount >= 6) {
-          document.getElementById("emo-display-text").innerText = maxEmo.toUpperCase() + " Confirmed!";
+          document.getElementById("emo-display-text").innerText = displayLabel + " Confirmed!";
           document.getElementById("emo-display-desc").innerText = "🎵 Generating playlist...";
           clearInterval(emoDetectInterval);
-          stopEmotionCam();
-          triggerEmotionPlaylist(maxEmo);
+          // keep camera open so mood stays on screen
+          // Pass the primary emotion for playlist generation to ensure compatibility
+          triggerEmotionPlaylist(primaryEmo);
         }
       }, 150);
     }
