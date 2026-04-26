@@ -232,6 +232,21 @@
     .song-meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 10px; }
     .meta-tag { background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 10px; font-size: 0.7rem; }
 
+    .dl-btn {
+      color: var(--text-muted);
+      transition: var(--tr);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px;
+      border-radius: 50%;
+    }
+    .dl-btn:hover {
+      color: var(--accent1);
+      background: rgba(255, 255, 255, 0.1);
+      transform: scale(1.1);
+    }
+
     /* BOTTOM PLAYER */
     .player-dock {
       height: 90px;
@@ -502,7 +517,10 @@
               <span class="meta-tag" style="background: rgba(254, 202, 87, 0.15); color: var(--accent2);">{{ song.mood }}</span>
             </div>
           </div>
-          <div class="song-action">
+          <div class="song-action" style="display:flex; gap:12px; align-items:center;">
+            <a href="{{ song.url }}" download="{{ song.title }}.mp3" class="dl-btn" title="Download" onclick="event.stopPropagation();">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </a>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6"><path d="M8 5v14l11-7z"/></svg>
           </div>
         </div>
@@ -535,6 +553,12 @@
         <button class="ctrl-btn" onclick="prevSong()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
         <button class="ctrl-btn play-btn" id="playBtn" onclick="togglePlay()"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
         <button class="ctrl-btn" onclick="nextSong()"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+        
+        <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.1); margin: 0 5px;"></div>
+        
+        <a id="np-download" href="#" download class="ctrl-btn" title="Download Current Track">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </a>
       </div>
       <div class="progress-container">
         <span id="cTime">0:00</span>
@@ -629,6 +653,10 @@
       
       pTitle.innerText = song.title;
       pArtist.innerText = song.singer;
+      
+      const dlBtn = document.getElementById("np-download");
+      dlBtn.href = song.url;
+      dlBtn.download = song.title + ".mp3";
       
       audio.src = song.url;
       audio.play().then(() => updatePlayIcon(true)).catch(e => console.error(e));
@@ -774,6 +802,12 @@
             <div class="song-info">
               <div class="song-title">${s.title}</div>
               <div class="song-meta"><span>${s.singer}</span> &bull; <span class="meta-tag">${s.lang}</span><span class="meta-tag" style="background: rgba(254, 202, 87, 0.15); color: var(--accent2);">${s.mood}</span></div>
+            </div>
+            <div class="song-action" style="display:flex; gap:12px; align-items:center;">
+              <a href="${s.url}" download="${s.title}.mp3" class="dl-btn" title="Download" onclick="event.stopPropagation();">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              </a>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6"><path d="M8 5v14l11-7z"/></svg>
             </div>
           </div>
         `).join('');

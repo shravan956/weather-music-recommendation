@@ -2370,7 +2370,7 @@
             aggr[emo] = (aggr[emo] || 0) + val;
           });
         });
-        const topEmotion = Object.keys(aggr).reduce((a,b) => aggr[a] > aggr[b] ? a : b);
+        // (topEmotion computed via sortedEmos below)
 
         // Update face-count badge
         const faceCountEl = document.getElementById("emo-face-count");
