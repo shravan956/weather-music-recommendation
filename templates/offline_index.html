@@ -331,40 +331,6 @@
       background: var(--text-main); border-radius: 3px;
     }
 
-    /* EMOTION MODE OVERLAY - UPDATED TO NEW THEME */
-    #emo-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(26, 26, 36, 0.95);
-      backdrop-filter: blur(20px);
-      z-index: 9999; display: none;
-      flex-direction: column; padding: 30px;
-    }
-    .emo-header {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;
-    }
-    .emo-title { font-size: 2rem; font-weight: 800; background: var(--accent-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .close-emo {
-      background: rgba(255,255,255,0.1); border: 1px solid var(--border);
-      color: white; padding: 10px 20px; border-radius: 30px; cursor: pointer;
-    }
-    .emo-content {
-      display: flex; gap: 30px; flex: 1; overflow: hidden;
-    }
-    .emo-cam-box {
-      flex: 1; background: var(--panel); border: 1px solid var(--border);
-      border-radius: var(--radius); display: flex; flex-direction: column; padding: 20px;
-    }
-    .emo-cam-view {
-      flex: 1; background: #000; border-radius: 12px; margin: 15px 0;
-      position: relative; overflow: hidden; display: flex; justify-content: center; align-items: center;
-    }
-    #emo-video { width: 100%; height: 100%; object-fit: cover; display: none; }
-    .emo-result-box {
-      width: 400px; background: var(--panel); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 30px; display: flex; flex-direction: column; align-items: center; text-align: center;
-    }
-    .emo-emoji { font-size: 5rem; margin: 20px 0; }
-    .emo-mood-text { font-size: 2rem; font-weight: 800; margin-bottom: 10px; color: var(--accent2); text-transform: capitalize; }
     
     /* Search bar in nav */
     .nav-search {
@@ -420,10 +386,6 @@
     <div class="nav-buttons">
       <button class="nav-btn" onclick="location.href='/'">Spotify</button>
       <button class="nav-btn" onclick="location.href='/yt/'">YouTube</button>
-      <button class="nav-btn" style="background:var(--accent-grad);color:#000;border:none;display:flex;align-items:center;gap:8px;" onclick="openEmotionMode()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
-        Emotion AI
-      </button>
     </div>
   </header>
 
@@ -582,43 +544,10 @@
   <!-- AUDIO ELEMENT -->
   <audio id="audioPlayer"></audio>
 
-  <!-- EMOTION OVERLAY -->
-  <div id="emo-overlay">
-    <div class="emo-header">
-      <div class="emo-title">AI Emotion Detect</div>
-      <button class="close-emo" onclick="closeEmotionMode()">Close Mode</button>
-    </div>
-    <div class="emo-content">
-      <div class="emo-cam-box">
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-          <h3 style="font-weight:600;">Camera Feed</h3>
-          <span id="emo-faces" style="color:var(--accent1); font-weight:600; font-size:0.9rem;">0 faces</span>
-        </div>
-        <div class="emo-cam-view" id="cam-container">
-          <div id="cam-placeholder" style="color:var(--text-muted);">Click Start Camera</div>
-          <video id="emo-video" autoplay muted playsinline></video>
-        </div>
-        <div style="display:flex; gap:10px;">
-          <button class="nav-btn active" style="flex:1; text-align:center;" onclick="startEmotionCam()">Start</button>
-          <button class="nav-btn" style="flex:1; text-align:center;" onclick="stopEmotionCam()">Stop</button>
-        </div>
-      </div>
-      
-      <div class="emo-result-box">
-        <h3 style="color:var(--text-muted); font-weight:400; letter-spacing:1px; text-transform:uppercase; font-size:0.9rem;">Detected Mood</h3>
-        <div class="emo-emoji" id="emo-emoji">🤔</div>
-        <div class="emo-mood-text" id="emo-text">Analyzing...</div>
-        <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:30px;" id="emo-sub">Please look at the camera.</p>
-        
-        <button class="nav-btn" style="width:100%; padding:15px; background:var(--accent-grad); color:#000; border:none; font-size:1.1rem; display:none;" id="emo-generate-btn" onclick="generateEmotionPlaylist()">
-          Play Suggested Tracks
-        </button>
-      </div>
-    </div>
-  </div>
+
 
   <!-- SCRIPTS -->
-  <script src="/static/models/face-api.min.js"></script>
+
   <script>
     // --- FILTERS ---
     function setFilter(type, val) {
@@ -717,104 +646,7 @@
       document.getElementById("vFill").style.width = (pct*100) + "%";
     }
     
-    // --- AI EMOTION OFFLINE ---
-    let emoStream = null;
-    let emoInterval = null;
-    const video = document.getElementById('emo-video');
-    const ph = document.getElementById('cam-placeholder');
-    const emoResult = { emoji: '🤔', text: 'Analyzing...', count: 0 };
-    let finalEmotion = null;
 
-    async function loadModels() {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('/static/models');
-      await faceapi.nets.faceExpressionNet.loadFromUri('/static/models');
-    }
-    loadModels();
-
-    function openEmotionMode() { document.getElementById('emo-overlay').style.display = 'flex'; }
-    function closeEmotionMode() { stopEmotionCam(); document.getElementById('emo-overlay').style.display = 'none'; }
-
-    async function startEmotionCam() {
-      ph.style.display = 'none';
-      video.style.display = 'block';
-      document.getElementById('emo-emoji').innerText = '⏳';
-      document.getElementById('emo-text').innerText = 'Starting Camera...';
-      try {
-        emoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = emoStream;
-        
-        video.addEventListener('play', () => {
-          if(emoInterval) clearInterval(emoInterval);
-          emoInterval = setInterval(async () => {
-            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
-            document.getElementById('emo-faces').innerText = detections.length + " faces";
-            
-            if(detections.length > 0) {
-              const exps = detections[0].expressions;
-              let maxE = 'neutral', maxV = 0;
-              for(const [e, v] of Object.entries(exps)) {
-                if(v > maxV) { maxV = v; maxE = e; }
-              }
-              if(maxV > 0.4) {
-                finalEmotion = maxE;
-                const emap = { happy:'😄', sad:'😢', angry:'😠', fearful:'😨', disgusted:'🤢', surprised:'😲', neutral:'😐' };
-                document.getElementById('emo-emoji').innerText = emap[maxE] || '🤔';
-                document.getElementById('emo-text').innerText = maxE;
-                document.getElementById('emo-sub').innerText = "Confidence: " + Math.round(maxV*100) + "%";
-                document.getElementById('emo-generate-btn').style.display = 'block';
-              }
-            } else {
-              document.getElementById('emo-emoji').innerText = '👀';
-              document.getElementById('emo-text').innerText = 'No face found';
-            }
-          }, 500);
-        });
-      } catch(e) {
-        ph.style.display = 'block'; video.style.display = 'none';
-        ph.innerText = 'Camera access denied.';
-      }
-    }
-
-    function stopEmotionCam() {
-      if(emoInterval) clearInterval(emoInterval);
-      if(emoStream) emoStream.getTracks().forEach(t => t.stop());
-      video.style.display = 'none'; ph.style.display = 'block';
-      document.getElementById('emo-faces').innerText = "0 faces";
-    }
-
-    function generateEmotionPlaylist() {
-      if(!finalEmotion) return;
-      fetch('/offline/api/emotion_playlist', {
-        method: 'POST',
-        body: JSON.stringify({ emotion: finalEmotion }),
-        headers: { 'Content-Type': 'application/json' }
-      })
-      .then(r => r.json())
-      .then(data => {
-        closeEmotionMode();
-        currentSongs = data.songs;
-        // Rewrite DOM list
-        const sl = document.getElementById('songsList');
-        sl.innerHTML = currentSongs.map((s,i) => `
-          <div class="song-item" onclick='playTrack(${i})' id="song-idx-${i}">
-            <div class="song-idx">${i+1}</div>
-            <div class="song-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></div>
-            <div class="song-info">
-              <div class="song-title">${s.title}</div>
-              <div class="song-meta"><span>${s.singer}</span> &bull; <span class="meta-tag">${s.lang}</span><span class="meta-tag" style="background: rgba(254, 202, 87, 0.15); color: var(--accent2);">${s.mood}</span></div>
-            </div>
-            <div class="song-action" style="display:flex; gap:12px; align-items:center;">
-              <a href="${s.url}" download="${s.title}.mp3" class="dl-btn" title="Download" onclick="event.stopPropagation();">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              </a>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6"><path d="M8 5v14l11-7z"/></svg>
-            </div>
-          </div>
-        `).join('');
-        document.querySelector('.track-count').innerText = "AI " + data.mood + " Playlist (" + currentSongs.length + " tracks)";
-        playTrack(0);
-      });
-    }
 
     // Auto-init volume
     audio.volume = 0.8;

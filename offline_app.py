@@ -34,16 +34,6 @@ WEATHER_MOOD = {
     "Autumn":  ["Classic","Nostalgic","Chill"],
 }
 
-# ─── Emotion → mood ───────────────────────────────────────────────────────────
-EMO_MOOD = {
-    "happy":     ["Happy","Party","Energetic"],
-    "sad":       ["Sad","Nostalgic","Chill"],
-    "angry":     ["Energetic","Dark","Party"],
-    "fearful":   ["Chill","Calm","Classic"],
-    "disgusted": ["Dark","Sad"],
-    "surprised": ["Party","Pop","Energetic"],
-    "neutral":   ["Chill","Classic","Romantic"],
-}
 
 # ─── Song name cleanup ────────────────────────────────────────────────────────
 def clean_title(filename):
@@ -205,18 +195,6 @@ def offline_api_songs():
         filter_lang   = f_lang   if f_lang   != "All" else None,
     )
     return jsonify(songs)
-
-@offline_bp.route("/offline/api/emotion_playlist", methods=["POST"])
-def offline_emotion_playlist():
-    data    = request.get_json(force=True)
-    emotion = (data.get("emotion") or "neutral").lower()
-    moods   = EMO_MOOD.get(emotion, ["Chill"])
-    all_songs = scan_songs()
-    playlist  = [s for s in all_songs if any(m in s["moods"] for m in moods)]
-    random.shuffle(playlist)
-    if not playlist:
-        playlist = all_songs[:10]
-    return jsonify({"mood": moods[0], "emotion": emotion, "songs": playlist[:20]})
 
 @offline_bp.route("/offline/api/weather_songs")
 def offline_weather_songs():
